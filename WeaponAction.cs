@@ -335,13 +335,15 @@ namespace WeaponPaints
 						{
 							var newKnife = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.Knife));
 							var newWeapon = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.USP));
-							player.GiveNamedItem(CsItem.Knife);
+							var equippedKnife = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.Knife));
 							player.ExecuteClientCommand("slot3");
 
 							Server.NextFrame(() =>
 							{
 								try
 								{
+									if (equippedKnife.IsValid)
+										GivePlayerWeaponSkin(player, equippedKnife);
 									if (newKnife != null && newKnife.IsValid)
 										newKnife.AddEntityIOEvent("Kill", newKnife, null, "", 0.01f);
 									if (newWeapon != null && newWeapon.IsValid)
@@ -366,6 +368,7 @@ namespace WeaponPaints
 							{
 								if (!newWeapon.IsValid || !player.IsValid) return;
 
+								GivePlayerWeaponSkin(player, newWeapon);
 								newWeapon.Clip1 = ammo.Item1;
 								newWeapon.ReserveAmmo[0] = ammo.Item2;
 

@@ -8,7 +8,7 @@ Environment available: source tree and .NET 10 build environment only; no Counte
 | T01 | Load without MenuManager, PlayerSettings, or AnyBase | NOT TESTED | Source/project/package references are absent and Release build passes, but plugin load requires a real CounterStrikeSharp server. |
 | T02 | Provider admin plugin: `!admin`, `!ban`, `!kick` | NOT TESTED | WeaponPaints registers none of these names and has no ACL integration; coexistence still requires the provider environment. |
 | T03 | Select on website, then connect | NOT TESTED | DB read and connection pipeline are present; needs Steam-authenticated website, MySQL, and CS2. |
-| T04 | Change selection while connected, then `!wp` | NOT TESTED | Code now awaits DB load, replaces slot cache, and schedules apply on the game thread; visual result requires CS2. |
+| T04 | Change selection while connected, then `!wp` | NOT TESTED | Code awaits DB load, replaces slot cache, schedules apply on the game thread, and explicitly reapplies skins to recreated weapon entities on the next frame; visual result requires CS2. |
 | T05 | Run `!ws` | NOT TESTED | `css_ws` remains configurable and prints `Website`; chat rendering requires CS2. |
 | T06 | Run `wp_refresh <steamid64>` and `wp_refresh all` | NOT TESTED | Console-only validation and per-player completion logging are implemented; needs connected players. |
 | T07 | Map change, disconnect/reconnect, respawn | NOT TESTED | Cache cleanup/hot reload/spawn paths were inspected and compile; lifecycle behavior requires CS2. |
