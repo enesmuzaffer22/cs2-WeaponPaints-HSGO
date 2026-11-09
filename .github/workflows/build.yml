@@ -34,7 +34,7 @@ jobs:
     - name: Restore
       run: dotnet restore
     - name: Build
-      run: dotnet build ${{ env.PROJECT_PATH }} -c WeaponPaints -o ${{ env.OUTPUT_PATH }}
+      run: dotnet build ${{ env.PROJECT_PATH }} -c Release -o ${{ env.OUTPUT_PATH }}
 
   publish:
     if: github.event_name == 'push'
@@ -50,7 +50,7 @@ jobs:
     - name: Restore
       run: dotnet restore
     - name: Build
-      run: dotnet build ${{ env.PROJECT_PATH }} -c WeaponPaints -o ${{ env.OUTPUT_PATH }}
+      run: dotnet build ${{ env.PROJECT_PATH }} -c Release -o ${{ env.OUTPUT_PATH }}
     - name: Clean files
       run: |
         rm -f \
@@ -58,8 +58,10 @@ jobs:
           ${{ env.OUTPUT_PATH }}/McMaster.NETCore.Plugins.dll \
           ${{ env.OUTPUT_PATH }}/Microsoft.DotNet.PlatformAbstractions.dll \
           ${{ env.OUTPUT_PATH }}/Microsoft.Extensions.DependencyModel.dll \
-    - name: Copy skins
-      run: cp -R website/data ${{ env.OUTPUT_PATH }}
+    - name: Copy runtime skin metadata
+      run: |
+        mkdir -p ${{ env.OUTPUT_PATH }}/data
+        cp website/data/skins_*.json ${{ env.OUTPUT_PATH }}/data/
     - name: Stage release layout
       run: |
         mkdir -p release/addons/counterstrikesharp/plugins release/addons/counterstrikesharp/gamedata
