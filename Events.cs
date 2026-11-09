@@ -21,45 +21,7 @@ namespace WeaponPaints
 			if (player is null || !player.IsValid || player.IsBot ||
 				WeaponSync == null || Database == null) return HookResult.Continue;
 
-			var playerInfo = new PlayerInfo
-			{
-				UserId = player.UserId,
-				Slot = player.Slot,
-				Index = (int)player.Index,
-				SteamId = player.SteamID.ToString(),
-				Name = player.PlayerName,
-				IpAddress = player.IpAddress?.Split(":")[0]
-			};
-
-			try
-			{
-				_ = Task.Run(async () => await WeaponSync.GetPlayerData(playerInfo));
-				/*
-				if (Config.Additional.SkinEnabled)
-				{
-					_ = Task.Run(async () => await weaponSync.GetWeaponPaintsFromDatabase(playerInfo));
-				}
-				if (Config.Additional.KnifeEnabled)
-				{
-					_ = Task.Run(async () => await weaponSync.GetKnifeFromDatabase(playerInfo));
-				}
-				if (Config.Additional.GloveEnabled)
-				{
-					_ = Task.Run(async () => await weaponSync.GetGloveFromDatabase(playerInfo));
-				}
-				if (Config.Additional.AgentEnabled)
-				{
-					_ = Task.Run(async () => await weaponSync.GetAgentFromDatabase(playerInfo));
-				}
-				if (Config.Additional.MusicEnabled)
-				{
-					_ = Task.Run(async () => await weaponSync.GetMusicFromDatabase(playerInfo));
-				}
-				*/
-			}
-			catch
-			{
-			}
+			QueuePlayerDataRefresh(player, reapplyCosmetics: true);
 			
 			Players.Add(player);
 
@@ -88,9 +50,9 @@ namespace WeaponPaints
 				if (WeaponSync != null)
 					await WeaponSync.SyncStatTrakToDatabase(playerInfo);
 
-				if (Config.Additional.SkinEnabled)
+				if (Config.Additional.SkinEnabled || Config.Additional.GloveEnabled)
 				{
-					GPlayerWeaponsInfo.TryRemove(player.Slot, out _);
+					GPlayerWeaponsInfo.TryRemove(playerInfo.Slot, out _);
 				}
 			});
 
@@ -132,7 +94,7 @@ namespace WeaponPaints
 		{
 			CCSPlayerController? player = @event.Userid;
 
-			if (player is null || !player.IsValid || Config.Additional is { KnifeEnabled: false, GloveEnabled: false })
+			if (player is null || !player.IsValid || player.IsBot)
 				return HookResult.Continue;
 
 			CCSPlayerPawn? pawn = player.PlayerPawn.Value;
@@ -140,13 +102,14 @@ namespace WeaponPaints
 			if (pawn == null || !pawn.IsValid)
 				return HookResult.Continue;
 
-			GivePlayerMusicKit(player);
-			GivePlayerAgent(player);
-			Server.NextFrame(() =>
-			{
-				GivePlayerGloves(player);
-			});
-			GivePlayerPin(player);
+			if (Config.Additional.MusicEnabled)
+				GivePlayerMusicKit(player);
+			if (Config.Additional.AgentEnabled)
+				GivePlayerAgent(player);
+			if (Config.Additional.GloveEnabled)
+				Server.NextFrame(() => GivePlayerGloves(player));
+			if (Config.Additional.PinsEnabled)
+				GivePlayerPin(player);
 
 			return HookResult.Continue;
 		}
@@ -264,23 +227,9 @@ namespace WeaponPaints
 			}
 		}
 
-		private void OnTick()
-		{
-			if (!Config.Additional.ShowSkinImage) return;
-
-			foreach (var player in Players)
-			{
-				if (_playerWeaponImage.TryGetValue(player.Slot, out var value) && !string.IsNullOrEmpty(value))
-				{
-					player.PrintToCenterHtml("<img src='{PATH}'</img>".Replace("{PATH}", value));
-				}
-			}
-		}
-		
 		[GameEventHandler]
 		public HookResult OnItemPickup(EventItemPickup @event, GameEventInfo _)
 		{
-			// if (!IsWindows) return HookResult.Continue;
 			var player = @event.Userid;
 			if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
 			if (!@event.Item.Contains("knife")) return HookResult.Continue;
@@ -341,9 +290,6 @@ namespace WeaponPaints
 			RegisterEventHandler<EventRoundMvp>(OnRoundMvp);
 			RegisterListener<Listeners.OnEntitySpawned>(OnEntityCreated);
 			RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
-
-			if (Config.Additional.ShowSkinImage)
-				RegisterListener<Listeners.OnTick>(OnTick);
 
 			VirtualFunctions.GiveNamedItemFunc.Hook(OnGiveNamedItemPost, HookMode.Post);
 			_giveNamedItemHooked = true;

@@ -2,7 +2,6 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
-using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
@@ -19,9 +18,9 @@ public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig
 	public WeaponPaintsConfig Config { get; set; } = new();
     private static WeaponPaintsConfig _config { get; set; } = new();
     public override string ModuleAuthor => "Nereziel & daffyy";
-	public override string ModuleDescription => "Skin, gloves, agents and knife selector, standalone and web-based";
+	public override string ModuleDescription => "Applies web-managed weapon paints and cosmetics from MySQL";
 	public override string ModuleName => "WeaponPaints";
-	public override string ModuleVersion => "3.3a";
+	public override string ModuleVersion => "3.3a-web-only.1";
 
 	public override void Load(bool hotReload)
 	{
@@ -37,35 +36,20 @@ public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig
 			GPlayersAgent.Clear();
 			GPlayersPin.Clear();
 			GPlayersMusic.Clear();
+			Players.Clear();
 
 			foreach (var player in Enumerable
-				         .OfType<CCSPlayerController>(Utilities.GetPlayers().TakeWhile(_ => WeaponSync != null))
+					         .OfType<CCSPlayerController>(Utilities.GetPlayers().TakeWhile(_ => WeaponSync != null))
 				         .Where(player => player.IsValid &&
 					         !string.IsNullOrEmpty(player.IpAddress) && player is
 						         { IsBot: false, Connected: PlayerConnectedState.Connected }))
 			{
-				var playerInfo = new PlayerInfo
-				{
-					UserId = player.UserId,
-					Slot = player.Slot,
-					Index = (int)player.Index,
-					SteamId = player?.SteamID.ToString(),
-					Name = player?.PlayerName,
-					IpAddress = player?.IpAddress?.Split(":")[0]
-				};
-
-				_ = Task.Run(async () =>
-				{
-					if (WeaponSync != null) await WeaponSync.GetPlayerData(playerInfo);
-				});
+				Players.Add(player);
+				QueuePlayerDataRefresh(player, reapplyCosmetics: true);
 			}
 		}
 
 		Utility.LoadSkinsFromFile(ModuleDirectory + $"/data/skins_{_config.SkinsLanguage}.json", Logger);
-		Utility.LoadGlovesFromFile(ModuleDirectory + $"/data/gloves_{_config.SkinsLanguage}.json", Logger);
-		Utility.LoadAgentsFromFile(ModuleDirectory + $"/data/agents_{_config.SkinsLanguage}.json", Logger);
-		Utility.LoadMusicFromFile(ModuleDirectory + $"/data/music_{_config.SkinsLanguage}.json", Logger);
-		Utility.LoadPinsFromFile(ModuleDirectory + $"/data/collectibles_{_config.SkinsLanguage}.json", Logger);
 
 		RegisterListeners();
 	}
@@ -121,30 +105,6 @@ public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig
 
 	public override void OnAllPluginsLoaded(bool hotReload)
 	{
-		try
-		{
-			MenuApi = MenuCapability.Get();
-			
-			if (Config.Additional.KnifeEnabled)
-				SetupKnifeMenu();
-			if (Config.Additional.SkinEnabled)
-				SetupSkinsMenu();
-			if (Config.Additional.GloveEnabled)
-				SetupGlovesMenu();
-			if (Config.Additional.AgentEnabled)
-				SetupAgentsMenu();
-			if (Config.Additional.MusicEnabled)
-				SetupMusicMenu();
-			if (Config.Additional.PinsEnabled)
-				SetupPinsMenu();
-		
-			RegisterCommands();
-		}
-		catch (Exception)
-		{
-			MenuApi = null;
-			Logger.LogError("Error while loading required plugins");
-			throw;
-		}
+		RegisterCommands();
 	}
 }

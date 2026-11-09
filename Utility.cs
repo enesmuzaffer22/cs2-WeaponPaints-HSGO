@@ -1,8 +1,6 @@
 ﻿using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Translations;
-using CounterStrikeSharp.API.Modules.Menu;
 using Dapper;
-using MenuManager;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -115,71 +113,15 @@ namespace WeaponPaints
 
 		internal static void LoadSkinsFromFile(string filePath, ILogger logger)
 		{
-			var json = File.ReadAllText(filePath);
 			try
 			{
+				var json = File.ReadAllText(filePath);
 				var deserializedSkins = JsonConvert.DeserializeObject<List<JObject>>(json);
 				WeaponPaints.SkinsList = deserializedSkins ?? [];
 			}
 			catch (FileNotFoundException)
 			{
 				logger?.LogError("Not found \"skins.json\" file");
-			}
-		}
-		
-		internal static void LoadPinsFromFile(string filePath, ILogger logger)
-		{
-			var json = File.ReadAllText(filePath);
-			try
-			{
-				var deserializedPins = JsonConvert.DeserializeObject<List<JObject>>(json);
-				WeaponPaints.PinsList = deserializedPins ?? [];
-			}
-			catch (FileNotFoundException)
-			{
-				logger?.LogError("Not found \"pins.json\" file");
-			}
-		}
-
-		internal static void LoadGlovesFromFile(string filePath, ILogger logger)
-		{
-			try
-			{
-				var json = File.ReadAllText(filePath);
-				var deserializedSkins = JsonConvert.DeserializeObject<List<JObject>>(json);
-				WeaponPaints.GlovesList = deserializedSkins ?? [];
-			}
-			catch (FileNotFoundException)
-			{
-				logger?.LogError("Not found \"gloves.json\" file");
-			}
-		}
-
-		internal static void LoadAgentsFromFile(string filePath, ILogger logger)
-		{
-			try
-			{
-				var json = File.ReadAllText(filePath);
-				var deserializedSkins = JsonConvert.DeserializeObject<List<JObject>>(json);
-				WeaponPaints.AgentsList = deserializedSkins ?? [];
-			}
-			catch (FileNotFoundException)
-			{
-				logger?.LogError("Not found \"agents.json\" file");
-			}
-		}
-
-		internal static void LoadMusicFromFile(string filePath, ILogger logger)
-		{
-			try
-			{
-				var json = File.ReadAllText(filePath);
-				var deserializedSkins = JsonConvert.DeserializeObject<List<JObject>>(json);
-				WeaponPaints.MusicList = deserializedSkins ?? [];
-			}
-			catch (FileNotFoundException)
-			{
-				logger?.LogError("Not found \"music.json\" file");
 			}
 		}
 
@@ -191,33 +133,6 @@ namespace WeaponPaints
 			Console.ResetColor();
 		}
 		
-		internal static IMenu? CreateMenu(string title)
-		{
-			var menuType = WeaponPaints.Instance.Config.MenuType.ToLower();
-        
-			var menu = menuType switch
-			{
-				_ when menuType.Equals("selectable", StringComparison.CurrentCultureIgnoreCase) =>
-					WeaponPaints.MenuApi?.NewMenu(title),
-
-				_ when menuType.Equals("dynamic", StringComparison.CurrentCultureIgnoreCase) =>
-					WeaponPaints.MenuApi?.NewMenuForcetype(title, MenuType.ButtonMenu),
-
-				_ when menuType.Equals("center", StringComparison.CurrentCultureIgnoreCase) =>
-					WeaponPaints.MenuApi?.NewMenuForcetype(title, MenuType.CenterMenu),
-
-				_ when menuType.Equals("chat", StringComparison.CurrentCultureIgnoreCase) =>
-					WeaponPaints.MenuApi?.NewMenuForcetype(title, MenuType.ChatMenu),
-
-				_ when menuType.Equals("console", StringComparison.CurrentCultureIgnoreCase) =>
-					WeaponPaints.MenuApi?.NewMenuForcetype(title, MenuType.ConsoleMenu),
-
-				_ => WeaponPaints.MenuApi?.NewMenu(title)
-			};
-
-			return menu;
-		}
-
 		internal static async Task CheckVersion(string version, ILogger logger)
 		{
 			using HttpClient client = new();

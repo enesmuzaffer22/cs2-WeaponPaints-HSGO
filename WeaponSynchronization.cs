@@ -17,11 +17,16 @@ internal class WeaponSynchronization
 		_config = config;
 	}
 
-	internal async Task GetPlayerData(PlayerInfo? player)
+	internal async Task<bool> GetPlayerData(PlayerInfo? player, bool replaceExisting = false)
 	{
+		if (player == null || string.IsNullOrEmpty(player.SteamId)) return false;
+
 		try
 		{
 			await using var connection = await _database.GetConnectionAsync();
+
+			if (replaceExisting)
+				ClearPlayerData(player.Slot);
 
 			if (_config.Additional.KnifeEnabled)
 				GetKnifeFromDatabase(player, connection);
@@ -31,16 +36,28 @@ internal class WeaponSynchronization
 				GetAgentFromDatabase(player, connection);
 			if (_config.Additional.MusicEnabled)
 				GetMusicFromDatabase(player, connection);
-			if (_config.Additional.SkinEnabled)
+			if (_config.Additional.SkinEnabled || _config.Additional.GloveEnabled)
 				GetWeaponPaintsFromDatabase(player, connection);
 			if (_config.Additional.PinsEnabled)
 				GetPinsFromDatabase(player, connection);
+
+			return true;
 		}
 		catch (Exception ex)
 		{
-			// Log the exception or handle it appropriately
-			Console.WriteLine($"An error occurred: {ex.Message}");
+			Utility.Log($"Unable to load player data for SteamID {player.SteamId}: {ex.Message}");
+			return false;
 		}
+	}
+
+	private static void ClearPlayerData(int slot)
+	{
+		WeaponPaints.GPlayerWeaponsInfo.TryRemove(slot, out _);
+		WeaponPaints.GPlayersKnife.TryRemove(slot, out _);
+		WeaponPaints.GPlayersGlove.TryRemove(slot, out _);
+		WeaponPaints.GPlayersAgent.TryRemove(slot, out _);
+		WeaponPaints.GPlayersMusic.TryRemove(slot, out _);
+		WeaponPaints.GPlayersPin.TryRemove(slot, out _);
 	}
 
 	private void GetKnifeFromDatabase(PlayerInfo? player, MySqlConnection connection)
@@ -164,7 +181,8 @@ internal class WeaponSynchronization
 	{
 		try
 		{
-			if (!_config.Additional.SkinEnabled || player == null || string.IsNullOrEmpty(player.SteamId))
+			if ((!_config.Additional.SkinEnabled && !_config.Additional.GloveEnabled) ||
+			    player == null || string.IsNullOrEmpty(player.SteamId))
 				return;
 				
 			var playerWeapons = WeaponPaints.GPlayerWeaponsInfo.GetOrAdd(player.Slot,
@@ -344,7 +362,7 @@ internal class WeaponSynchronization
 	{
 		try
 		{
-			if (string.IsNullOrEmpty(player?.SteamId))
+			if (!_config.Additional.PinsEnabled || string.IsNullOrEmpty(player?.SteamId))
 				return;
 
 			const string query = "SELECT `id`, `weapon_team` FROM `wp_player_pins` WHERE `steamid` = @steamid ORDER BY `weapon_team` ASC";
