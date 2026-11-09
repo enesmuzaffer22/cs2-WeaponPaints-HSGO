@@ -1,8 +1,8 @@
 # Build and Package Report
 
-Report date: 2026-11-09  
-Branch: `feat/web-only-no-menumanager`  
-Base commit: `3b2eb5f96db976ff2b1def91debbc2f399859867`  
+Report date: 2026-11-09
+Branch: `feat/web-only-no-menumanager`
+Base commit: `3b2eb5f96db976ff2b1def91debbc2f399859867`
 Plugin version: `3.3a-web-only.1`
 
 ## Toolchain
@@ -44,6 +44,7 @@ Results:
 - Output: `bin/Release/net10.0/WeaponPaints.dll`
 - MenuManager/PlayerSettings/AnyBase source or project references: none
 - MenuManager/PlayerSettings/AnyBase files in staged package: none
+- `dotnet test WeaponPaints.sln -c Release --no-restore --no-build`: exited successfully, but the solution contains no test project, so no automated tests were executed
 
 ## Package
 
@@ -68,4 +69,3 @@ The staged directory next to the ZIP is retained for inspection and is ignored b
 The GitHub workflow now builds Release and copies only runtime `skins_*.json` metadata into the plugin data directory. Its release layout remains compatible with extraction into `game/csgo/`.
 
 Compilation and packaging do not validate native hooks or actual CS2 behavior. See `docs/test-matrix.md` for server-dependent status.
-

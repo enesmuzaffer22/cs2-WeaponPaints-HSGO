@@ -187,4 +187,3 @@ dotnet build WeaponPaints.csproj -c Release
 ```
 
 Successful compilation proves source compatibility only. CounterStrikeSharp lifecycle, native hooks, provider admin coexistence, MySQL behavior, and cosmetic rendering still require a CS2 test server.
-

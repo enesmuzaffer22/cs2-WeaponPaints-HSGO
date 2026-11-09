@@ -1,6 +1,6 @@
 # WeaponPaints Web-Only Dependency Audit
 
-Audit date: 2026-11-09  
+Audit date: 2026-11-09
 Audit scope: source inspection only; no refactor, restore, build, package, database, or game-server change was performed.
 
 ## Repository baseline
@@ -174,4 +174,3 @@ Expected non-framework runtime libraries include WeaponPaints, Dapper, MySqlConn
 The menu subsystem is structurally separable from the DB-read and cosmetic-application paths. WeaponPaints directly depends on MenuManager only for in-game selection UI. PlayerSettingsCS2 and AnyBaseLibCS2 are not directly used by this repository. Removing the six menu builders, their callbacks/UI state, the capability fields, and the project DLL reference should leave the web-driven read/apply path intact.
 
 The highest-risk parts of the implementation are not the MenuManager type removals themselves; they are correct asynchronous refresh, stale-cache replacement, game-thread handoff, hot reload, and packaging the still-required JSON/runtime files. These require build validation and a real CounterStrikeSharp test server before production use.
-

@@ -51,4 +51,3 @@ This plan follows the dependency audit at commit `3b2eb5f96db976ff2b1def91debbc2
 - Locally verify clean source search, build output, package layout, and absence of menu assemblies.
 - Mark provider-admin coexistence, live MySQL behavior, map changes, respawns, and hot reload NOT TESTED unless a suitable server is explicitly provided.
 - Stop and request approval before any schema change, production DB access, credential change, server upload, or deployment.
-

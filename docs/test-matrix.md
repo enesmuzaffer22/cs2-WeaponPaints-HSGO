@@ -1,6 +1,6 @@
 # Web-Only Test Matrix
 
-Date: 2026-11-09  
+Date: 2026-11-09
 Environment available: source tree and .NET 10 build environment only; no CounterStrikeSharp/CS2 test server, provider admin plugin, or test MySQL instance was supplied.
 
 | ID | Test | Status | Evidence / remaining work |
@@ -30,6 +30,6 @@ Environment available: source tree and .NET 10 build environment only; no Counte
 | S06 | Package contains no menu plugin assembly | PASS | Recursive staged-package name check returned no MenuManager, PlayerSettings, or AnyBase files |
 | S07 | MySQL schema names preserved | PASS | Existing six table names and team/SteamID query semantics remain in source; no ALTER/DROP/rename added |
 | S08 | Website source unchanged | PASS | No file under `website/` was modified |
+| S09 | Automated test suite | NOT AVAILABLE | `dotnet test` exits successfully, but the solution contains no test project |
 
 Do not promote this build to production until the relevant T01-T12 rows are exercised on a disposable/test server and updated to PASS or FAIL.
-

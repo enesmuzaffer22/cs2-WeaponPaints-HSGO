@@ -29,4 +29,3 @@
 - [ ] Restore the database only if data was separately damaged or changed; normal code rollback does not require it because this refactor has no migration.
 
 Database rollback can discard newer website selections. Prefer plugin/config/gamedata rollback unless a database restore is genuinely necessary.
-
