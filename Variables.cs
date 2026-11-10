@@ -21,6 +21,9 @@ public partial class WeaponPaints
 	private static bool _gBCommandsAllowed = true;
 
 	private static readonly Dictionary<int, DateTime> CommandsCooldown = new();
+	private static readonly ConcurrentDictionary<int, long> PlayerRefreshGenerations = new();
+	private static readonly ConcurrentDictionary<ulong, int> PlayerMapRefreshGenerations = new();
+	private static int _mapGeneration;
 	internal static Database? Database;
 
 	private static readonly MemoryFunctionVoid<nint, string, float> CAttributeListSetOrAddAttributeValueByName = new(GameData.GetSignature("CAttributeList_SetOrAddAttributeValueByName"));

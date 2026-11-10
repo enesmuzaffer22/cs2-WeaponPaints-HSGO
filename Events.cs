@@ -44,13 +44,20 @@ namespace WeaponPaints
 				Name = player.PlayerName,
 				IpAddress = player.IpAddress?.Split(":")[0]
 			};
+			var disconnectGeneration = PlayerRefreshGenerations.AddOrUpdate(
+				player.Slot,
+				1,
+				(_, current) => current + 1);
+			PlayerMapRefreshGenerations.TryRemove(player.SteamID, out _);
 
 			Task.Run(async () => 
 			{
 				if (WeaponSync != null)
 					await WeaponSync.SyncStatTrakToDatabase(playerInfo);
 
-				if (Config.Additional.SkinEnabled || Config.Additional.GloveEnabled)
+				if ((Config.Additional.SkinEnabled || Config.Additional.GloveEnabled) &&
+				    PlayerRefreshGenerations.TryGetValue(playerInfo.Slot, out var current) &&
+				    current == disconnectGeneration)
 				{
 					GPlayerWeaponsInfo.TryRemove(playerInfo.Slot, out _);
 				}
@@ -88,6 +95,8 @@ namespace WeaponPaints
 		{
 			_fadeSeed = 0;
 			_nextItemId = MinimumCustomItemId;
+			_mapGeneration++;
+			PlayerMapRefreshGenerations.Clear();
 		}
 
 		private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
@@ -110,6 +119,9 @@ namespace WeaponPaints
 				Server.NextFrame(() => GivePlayerGloves(player));
 			if (Config.Additional.PinsEnabled)
 				GivePlayerPin(player);
+
+			if (PlayerMapRefreshGenerations.TryAdd(player.SteamID, _mapGeneration))
+				QueuePlayerDataRefresh(player, reapplyCosmetics: true);
 
 			return HookResult.Continue;
 		}
@@ -175,7 +187,10 @@ namespace WeaponPaints
 					GivePlayerWeaponSkin(player, weapon);
 				}
 			}
-			catch { }
+			catch (Exception ex)
+			{
+				Logger.LogWarning(ex, "Failed to apply a weapon cosmetic in GiveNamedItem post-hook.");
+			}
 
 			return HookResult.Continue;
 		}
@@ -220,8 +235,9 @@ namespace WeaponPaints
 						
 						GivePlayerWeaponSkin(player, weapon);
 					}
-					catch (Exception)
+					catch (Exception ex)
 					{
+						Logger.LogWarning(ex, "Failed to apply a weapon cosmetic after entity creation.");
 					}
 				});
 			}

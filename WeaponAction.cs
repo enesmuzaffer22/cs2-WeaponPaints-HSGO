@@ -125,8 +125,8 @@ namespace WeaponPaints
 			if (fallbackPaintKit == 0)
 				return;
 
-			if (weaponInfo.KeyChain != null) SetKeychain(player, weapon);
-			if (weaponInfo.Stickers.Count > 0) SetStickers(player, weapon);
+			if (weaponInfo.KeyChain is { Id: > 0 }) SetKeychain(player, weapon);
+			SetStickers(player, weapon);
 
 			skinInfo = SkinsList
 				.Where(w => 
@@ -168,14 +168,22 @@ namespace WeaponPaints
 			if (!HasChangedPaint(player ,weaponDefIndex, out var weaponInfo) || weaponInfo == null)
 				return;
 
-			foreach (var sticker in weaponInfo.Stickers)
+			for (var slot = 0; slot < 5; slot++)
 			{
-				int stickerSlot = weaponInfo.Stickers.IndexOf(sticker);
+				CAttributeListSetOrAddAttributeValueByName.Invoke(
+					weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
+					$"sticker slot {slot} id", 0);
+			}
+
+			foreach (var sticker in weaponInfo.Stickers.Where(sticker => sticker.Slot is >= 0 and < 5))
+			{
+				int stickerSlot = sticker.Slot;
 
 				CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
 					$"sticker slot {stickerSlot} id", ViewAsFloat(sticker.Id));
 				if (sticker.OffsetX != 0 || sticker.OffsetY != 0)
-					CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
+					CAttributeListSetOrAddAttributeValueByName.Invoke(
+						weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
 						$"sticker slot {stickerSlot} schema", 0);
 				CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
 					$"sticker slot {stickerSlot} offset x", sticker.OffsetX);
@@ -255,20 +263,20 @@ namespace WeaponPaints
 			return false;
 		}
 
-		private void RefreshWeapons(CCSPlayerController? player)
+		private bool RefreshWeapons(CCSPlayerController? player)
 		{
-			if (!_gBCommandsAllowed) return;
+			if (!_gBCommandsAllowed) return false;
 			if (player == null || !player.IsValid || player.PlayerPawn.Value == null || (LifeState_t)player.LifeState != LifeState_t.LIFE_ALIVE)
-				return;
+				return false;
 			if (player.PlayerPawn.Value.WeaponServices == null || player.PlayerPawn.Value.ItemServices == null)
-				return;
+				return false;
 
 			var weapons = player.PlayerPawn.Value.WeaponServices.MyWeapons;
 
 			if (weapons.Count == 0)
-				return;
+				return false;
 			if (player.Team is CsTeam.None or CsTeam.Spectator)
-				return;
+				return false;
 
 			var hasKnife = false;
 			
@@ -309,7 +317,7 @@ namespace WeaponPaints
 
 						value.Add((clip1, reservedAmmo));
 
-						if (gun.VData == null) return;
+						if (gun.VData == null) continue;
 						
 						weapon.Value?.AddEntityIOEvent("Kill", weapon.Value, null, "", 0.1f);
 					}
@@ -336,14 +344,14 @@ namespace WeaponPaints
 							var newKnife = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.Knife));
 							var newWeapon = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.USP));
 							var equippedKnife = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.Knife));
+							if (equippedKnife.IsValid)
+								GivePlayerWeaponSkin(player, equippedKnife);
 							player.ExecuteClientCommand("slot3");
 
 							Server.NextFrame(() =>
 							{
 								try
 								{
-									if (equippedKnife.IsValid)
-										GivePlayerWeaponSkin(player, equippedKnife);
 									if (newKnife != null && newKnife.IsValid)
 										newKnife.AddEntityIOEvent("Kill", newKnife, null, "", 0.01f);
 									if (newWeapon != null && newWeapon.IsValid)
@@ -362,13 +370,14 @@ namespace WeaponPaints
 							foreach (var ammo in entry.Value)
 							{
 								var newWeapon = new CBasePlayerWeapon(player.GiveNamedItem(entry.Key));
+								if (newWeapon.IsValid)
+									GivePlayerWeaponSkin(player, newWeapon);
 								Server.NextFrame(() =>
 						{
 							try
 							{
 								if (!newWeapon.IsValid || !player.IsValid) return;
 
-								GivePlayerWeaponSkin(player, newWeapon);
 								newWeapon.Clip1 = ammo.Item1;
 								newWeapon.ReserveAmmo[0] = ammo.Item2;
 
@@ -382,6 +391,7 @@ namespace WeaponPaints
 							}
 						}
 					}, TimerFlags.STOP_ON_MAPCHANGE);
+			return true;
 		}
 
 		private void GivePlayerGloves(CCSPlayerController player)

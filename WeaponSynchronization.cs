@@ -10,6 +10,7 @@ internal class WeaponSynchronization
 {
 	private readonly WeaponPaintsConfig _config;
 	private readonly Database _database;
+	private readonly ConcurrentDictionary<int, SemaphoreSlim> _playerLoadLocks = new();
 
 	internal WeaponSynchronization(Database database, WeaponPaintsConfig config)
 	{
@@ -17,29 +18,43 @@ internal class WeaponSynchronization
 		_config = config;
 	}
 
-	internal async Task<bool> GetPlayerData(PlayerInfo? player, bool replaceExisting = false)
+	internal async Task<bool> GetPlayerData(PlayerInfo? player, Func<bool>? canCommit = null)
 	{
 		if (player == null || string.IsNullOrEmpty(player.SteamId)) return false;
+		var loadLock = _playerLoadLocks.GetOrAdd(player.Slot, _ => new SemaphoreSlim(1, 1));
+		await loadLock.WaitAsync();
+		var stagingSlot = -(player.Slot + 1);
+		var stagedPlayer = new PlayerInfo
+		{
+			UserId = player.UserId,
+			Slot = stagingSlot,
+			Index = player.Index,
+			SteamId = player.SteamId,
+			Name = player.Name,
+			IpAddress = player.IpAddress
+		};
 
 		try
 		{
 			await using var connection = await _database.GetConnectionAsync();
-
-			if (replaceExisting)
-				ClearPlayerData(player.Slot);
+			ClearPlayerData(stagingSlot);
 
 			if (_config.Additional.KnifeEnabled)
-				GetKnifeFromDatabase(player, connection);
+				GetKnifeFromDatabase(stagedPlayer, connection);
 			if (_config.Additional.GloveEnabled)
-				GetGloveFromDatabase(player, connection);
+				GetGloveFromDatabase(stagedPlayer, connection);
 			if (_config.Additional.AgentEnabled)
-				GetAgentFromDatabase(player, connection);
+				GetAgentFromDatabase(stagedPlayer, connection);
 			if (_config.Additional.MusicEnabled)
-				GetMusicFromDatabase(player, connection);
+				GetMusicFromDatabase(stagedPlayer, connection);
 			if (_config.Additional.SkinEnabled || _config.Additional.GloveEnabled)
-				GetWeaponPaintsFromDatabase(player, connection);
+				GetWeaponPaintsFromDatabase(stagedPlayer, connection);
 			if (_config.Additional.PinsEnabled)
-				GetPinsFromDatabase(player, connection);
+				GetPinsFromDatabase(stagedPlayer, connection);
+
+			if (canCommit != null && !canCommit()) return false;
+
+			CommitPlayerData(stagingSlot, player.Slot);
 
 			return true;
 		}
@@ -48,6 +63,29 @@ internal class WeaponSynchronization
 			Utility.Log($"Unable to load player data for SteamID {player.SteamId}: {ex.Message}");
 			return false;
 		}
+		finally
+		{
+			ClearPlayerData(stagingSlot);
+			loadLock.Release();
+		}
+	}
+
+	private static void CommitPlayerData(int sourceSlot, int targetSlot)
+	{
+		MoveOrRemove(WeaponPaints.GPlayerWeaponsInfo, sourceSlot, targetSlot);
+		MoveOrRemove(WeaponPaints.GPlayersKnife, sourceSlot, targetSlot);
+		MoveOrRemove(WeaponPaints.GPlayersGlove, sourceSlot, targetSlot);
+		MoveOrRemove(WeaponPaints.GPlayersAgent, sourceSlot, targetSlot);
+		MoveOrRemove(WeaponPaints.GPlayersMusic, sourceSlot, targetSlot);
+		MoveOrRemove(WeaponPaints.GPlayersPin, sourceSlot, targetSlot);
+	}
+
+	private static void MoveOrRemove<T>(ConcurrentDictionary<int, T> cache, int sourceSlot, int targetSlot)
+	{
+		if (cache.TryGetValue(sourceSlot, out var value))
+			cache[targetSlot] = value;
+		else
+			cache.TryRemove(targetSlot, out _);
 	}
 
 	private static void ClearPlayerData(int slot)
@@ -101,7 +139,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetKnifeFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load knife data.", ex);
 		}
 	}
 
@@ -145,7 +183,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetGlovesFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load glove data.", ex);
 		}
 	}
 
@@ -173,7 +211,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetAgentFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load agent data.", ex);
 		}
 	}
 
@@ -210,11 +248,11 @@ internal class WeaponSynchronization
 					_ => CsTeam.None,
 				};
 						
-				string[]? keyChainParts = row.weapon_keychain?.ToString().Split(';');
+				string[]? keyChainParts = row.weapon_keychain?.ToString()?.Split(';');
 
 				KeyChainInfo keyChainInfo = new KeyChainInfo();
 
-				if (keyChainParts!.Length == 5 &&
+				if (keyChainParts is { Length: 5 } &&
 				    uint.TryParse(keyChainParts[0], out uint keyChainId) &&
 				    float.TryParse(keyChainParts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float keyChainOffsetX) &&
 				    float.TryParse(keyChainParts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float keyChainOffsetY) &&
@@ -257,7 +295,7 @@ internal class WeaponSynchronization
 					string stickerColumn = $"weapon_sticker_{i}";
 					var stickerData = ((IDictionary<string, object>)row!)[stickerColumn]; // Safely cast row to a dictionary
 
-					if (string.IsNullOrEmpty(stickerData.ToString())) continue;
+					if (stickerData == null || string.IsNullOrEmpty(stickerData.ToString())) continue;
 						
 					var parts = stickerData.ToString()!.Split(';');
 
@@ -273,6 +311,7 @@ internal class WeaponSynchronization
 						
 					StickerInfo stickerInfo = new StickerInfo
 					{
+						Slot = i,
 						Id = stickerId,
 						Schema = stickerSchema,
 						OffsetX = stickerOffsetX,
@@ -309,7 +348,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetWeaponPaintsFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load weapon paint data.", ex);
 		}
 	}
 
@@ -354,7 +393,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetMusicFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load music data.", ex);
 		}
 	}
 
@@ -399,7 +438,7 @@ internal class WeaponSynchronization
 		}
 		catch (Exception ex)
 		{
-			Utility.Log($"An error occurred in GetPinsFromDatabase: {ex.Message}");
+			throw new InvalidOperationException("Unable to load pin data.", ex);
 		}
 	}
 

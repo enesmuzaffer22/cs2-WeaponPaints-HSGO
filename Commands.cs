@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
+using Microsoft.Extensions.Logging;
 
 namespace WeaponPaints;
 
@@ -121,10 +122,13 @@ public partial class WeaponPaints
 
 		var expectedSteamId = player.SteamID;
 		var playerInfo = CreatePlayerInfo(player);
+		var refreshGeneration = PlayerRefreshGenerations.AddOrUpdate(player.Slot, 1, (_, current) => current + 1);
 
 		_ = Task.Run(async () =>
 		{
-			var loaded = await WeaponSync.GetPlayerData(playerInfo, replaceExisting: true);
+			var loaded = await WeaponSync.GetPlayerData(playerInfo, () =>
+				PlayerRefreshGenerations.TryGetValue(playerInfo.Slot, out var current) &&
+				current == refreshGeneration);
 
 			Server.NextFrame(() =>
 			{
@@ -138,29 +142,84 @@ public partial class WeaponPaints
 				}
 
 				if (reapplyCosmetics)
-					ApplyCachedCosmetics(player);
-
-				if (notifyPlayer && !string.IsNullOrEmpty(Localizer["wp_command_refresh_done"]))
-					player.Print(Localizer["wp_command_refresh_done"]);
-
-				if (logToConsole)
-					Console.WriteLine($"[WeaponPaints] Database refresh completed for {player.PlayerName}.");
+				{
+					ScheduleCachedCosmeticApply(
+						player,
+						expectedSteamId,
+						refreshGeneration,
+						notifyPlayer,
+						logToConsole);
+				}
+				else
+				{
+					CompletePlayerRefresh(player, notifyPlayer, logToConsole);
+				}
 			});
 		});
 	}
 
-	private void ApplyCachedCosmetics(CCSPlayerController player)
+	private void ScheduleCachedCosmeticApply(
+		CCSPlayerController player,
+		ulong expectedSteamId,
+		long refreshGeneration,
+		bool notifyPlayer,
+		bool logToConsole,
+		int attempt = 0)
+	{
+		if (!player.IsValid || player.SteamID != expectedSteamId ||
+		    !PlayerRefreshGenerations.TryGetValue(player.Slot, out var current) ||
+		    current != refreshGeneration)
+			return;
+
+		if (ApplyCachedCosmetics(player))
+		{
+			CompletePlayerRefresh(player, notifyPlayer, logToConsole);
+			return;
+		}
+
+		if (attempt >= 3)
+		{
+			Logger.LogWarning(
+				"Cosmetic refresh for {PlayerName} was loaded but could not be applied because the pawn or weapons were not ready.",
+				player.PlayerName);
+			return;
+		}
+
+		AddTimer(0.2f * (attempt + 1), () =>
+			ScheduleCachedCosmeticApply(
+				player,
+				expectedSteamId,
+				refreshGeneration,
+				notifyPlayer,
+				logToConsole,
+				attempt + 1),
+			CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+	}
+
+	private void CompletePlayerRefresh(CCSPlayerController player, bool notifyPlayer, bool logToConsole)
+	{
+		if (notifyPlayer && !string.IsNullOrEmpty(Localizer["wp_command_refresh_done"]))
+			player.Print(Localizer["wp_command_refresh_done"]);
+
+		if (logToConsole)
+			Console.WriteLine($"[WeaponPaints] Database refresh completed for {player.PlayerName}.");
+	}
+
+	private bool ApplyCachedCosmetics(CCSPlayerController player)
 	{
 		if (Config.Additional.GloveEnabled)
 			GivePlayerGloves(player);
+		var weaponsAccepted = true;
 		if (Config.Additional.SkinEnabled || Config.Additional.KnifeEnabled)
-			RefreshWeapons(player);
+			weaponsAccepted = RefreshWeapons(player);
 		if (Config.Additional.AgentEnabled)
 			GivePlayerAgent(player);
 		if (Config.Additional.MusicEnabled)
 			GivePlayerMusicKit(player);
 		if (Config.Additional.PinsEnabled)
 			GivePlayerPin(player);
+
+		return weaponsAccepted;
 	}
 
 	private static PlayerInfo CreatePlayerInfo(CCSPlayerController player)
