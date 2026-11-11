@@ -20,7 +20,7 @@ public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig
     public override string ModuleAuthor => "Nereziel & daffyy";
 	public override string ModuleDescription => "Applies web-managed weapon paints and cosmetics from MySQL";
 	public override string ModuleName => "WeaponPaints";
-	public override string ModuleVersion => "3.3a-web-only.5";
+	public override string ModuleVersion => "3.3a-web-only.8";
 
 	public override void Load(bool hotReload)
 	{

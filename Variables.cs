@@ -24,6 +24,7 @@ public partial class WeaponPaints
 	private static readonly ConcurrentDictionary<int, long> PlayerRefreshGenerations = new();
 	private static readonly ConcurrentDictionary<ulong, int> PlayerMapRefreshGenerations = new();
 	private static readonly ConcurrentDictionary<nint, byte> AppliedWeaponEntities = new();
+	private static readonly ConcurrentDictionary<(int PlayerSlot, CsTeam Team, int WeaponDefIndex), int> StickerWearRevisions = new();
 	private static int _mapGeneration;
 	internal static Database? Database;
 

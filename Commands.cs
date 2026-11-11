@@ -139,7 +139,6 @@ public partial class WeaponPaints
 		var expectedSteamId = player.SteamID;
 		var playerInfo = CreatePlayerInfo(player);
 		var refreshGeneration = PlayerRefreshGenerations.AddOrUpdate(player.Slot, 1, (_, current) => current + 1);
-		var cosmeticsBeforeRefresh = CaptureCosmeticState(player.Slot);
 
 		_ = Task.Run(async () =>
 		{
@@ -165,8 +164,7 @@ public partial class WeaponPaints
 						refreshGeneration,
 						notifyPlayer,
 						logToConsole,
-						refreshHeldWeapons,
-						cosmeticsBeforeRefresh);
+						refreshHeldWeapons);
 				}
 				else
 				{
@@ -183,17 +181,12 @@ public partial class WeaponPaints
 		bool notifyPlayer,
 		bool logToConsole,
 		bool refreshHeldWeapons,
-		IReadOnlyDictionary<(CsTeam Team, int WeaponDefIndex), string> cosmeticsBeforeRefresh,
 		int attempt = 0)
 	{
 		if (!player.IsValid || player.SteamID != expectedSteamId ||
 		    !PlayerRefreshGenerations.TryGetValue(player.Slot, out var current) ||
 		    current != refreshGeneration)
 			return;
-
-		IReadOnlySet<int> changedWeapons = refreshHeldWeapons
-			? GetChangedWeaponDefIndexes(player.Slot, player.Team, cosmeticsBeforeRefresh)
-			: new HashSet<int>();
 
 		bool IsCurrentRefresh()
 		{
@@ -202,7 +195,7 @@ public partial class WeaponPaints
 			       generation == refreshGeneration;
 		}
 
-		if (ApplyCachedCosmetics(player, refreshHeldWeapons, changedWeapons, IsCurrentRefresh, success =>
+		if (ApplyCachedCosmetics(player, refreshHeldWeapons, IsCurrentRefresh, success =>
 		    {
 			    if (!IsCurrentRefresh())
 				    return;
@@ -233,7 +226,6 @@ public partial class WeaponPaints
 				notifyPlayer,
 				logToConsole,
 				refreshHeldWeapons,
-				cosmeticsBeforeRefresh,
 				attempt + 1));
 	}
 
@@ -260,7 +252,6 @@ public partial class WeaponPaints
 	private bool ApplyCachedCosmetics(
 		CCSPlayerController player,
 		bool refreshHeldWeapons,
-		IReadOnlySet<int> changedWeapons,
 		Func<bool> canContinue,
 		Action<bool> completed)
 	{
@@ -270,7 +261,7 @@ public partial class WeaponPaints
 		if (Config.Additional.SkinEnabled || Config.Additional.KnifeEnabled)
 		{
 			weaponsAccepted = refreshHeldWeapons
-				? RefreshWeapons(player, changedWeapons, canContinue, completed)
+				? RefreshWeapons(player, canContinue, completed)
 				: ApplyWeaponSkinsInPlace(player);
 		}
 		if (Config.Additional.AgentEnabled)

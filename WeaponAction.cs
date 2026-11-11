@@ -107,7 +107,7 @@ namespace WeaponPaints
 			
 			weapon.FallbackSeed = weaponInfo is { Paint: 38, Seed: 0 } ? _fadeSeed++ : weaponInfo.Seed;
 			
-			weapon.FallbackWear = ClampWear(weaponInfo.Wear);
+			weapon.FallbackWear = GetEffectiveWeaponWear(player, weaponDefIndex, weaponInfo.Wear);
 			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle, "set item texture prefab", weapon.FallbackPaintKit);
 			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle, "set item texture seed", weapon.FallbackSeed);
 			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle, "set item texture wear", weapon.FallbackWear);
@@ -153,22 +153,28 @@ namespace WeaponPaints
 			if (!HasChangedPaint(player ,weaponDefIndex, out var weaponInfo) || weaponInfo == null)
 				return;
 
-			var attributes = weapon.AttributeManager.Item.NetworkedDynamicAttributes;
+			var attributeHandles = new[]
+			{
+				weapon.AttributeManager.Item.AttributeList.Handle,
+				weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle
+			};
 			foreach (var sticker in weaponInfo.Stickers.Where(sticker => sticker.Slot is >= 0 and < 5))
 			{
 				int stickerSlot = sticker.Slot;
-
-				SetStickerAttribute(attributes.Handle, stickerSlot, "id", ViewAsFloat(sticker.Id));
-				if (sticker.Schema > 0 || sticker.OffsetX != 0 || sticker.OffsetY != 0)
+				foreach (var attributesHandle in attributeHandles)
 				{
-					var schema = sticker.OffsetX != 0 || sticker.OffsetY != 0 ? 0 : sticker.Schema;
-					SetStickerAttribute(attributes.Handle, stickerSlot, "schema", schema);
+					SetStickerAttribute(attributesHandle, stickerSlot, "id", ViewAsFloat(sticker.Id));
+					if (sticker.Schema > 0 || sticker.OffsetX != 0 || sticker.OffsetY != 0)
+					{
+						var schema = sticker.OffsetX != 0 || sticker.OffsetY != 0 ? 0 : sticker.Schema;
+						SetStickerAttribute(attributesHandle, stickerSlot, "schema", schema);
+					}
+					SetStickerAttribute(attributesHandle, stickerSlot, "offset x", sticker.OffsetX);
+					SetStickerAttribute(attributesHandle, stickerSlot, "offset y", sticker.OffsetY);
+					SetStickerAttribute(attributesHandle, stickerSlot, "wear", sticker.Wear);
+					SetStickerAttribute(attributesHandle, stickerSlot, "scale", sticker.Scale > 0 ? sticker.Scale : 1.0f);
+					SetStickerAttribute(attributesHandle, stickerSlot, "rotation", sticker.Rotation);
 				}
-				SetStickerAttribute(attributes.Handle, stickerSlot, "offset x", sticker.OffsetX);
-				SetStickerAttribute(attributes.Handle, stickerSlot, "offset y", sticker.OffsetY);
-				SetStickerAttribute(attributes.Handle, stickerSlot, "wear", sticker.Wear);
-				SetStickerAttribute(attributes.Handle, stickerSlot, "scale", sticker.Scale > 0 ? sticker.Scale : 1.0f);
-				SetStickerAttribute(attributes.Handle, stickerSlot, "rotation", sticker.Rotation);
 			}
 		}
 
@@ -191,16 +197,18 @@ namespace WeaponPaints
 			
 			var keyChain = value.KeyChain;
 
-			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
-				"keychain slot 0 id", ViewAsFloat(keyChain.Id));
-			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
-				"keychain slot 0 offset x", keyChain.OffsetX);
-			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
-				"keychain slot 0 offset y", keyChain.OffsetY);
-			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
-				"keychain slot 0 offset z", keyChain.OffsetZ);
-			CAttributeListSetOrAddAttributeValueByName.Invoke(weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle,
-				"keychain slot 0 seed", ViewAsFloat(keyChain.Seed));
+			foreach (var attributesHandle in new[]
+			         {
+				         weapon.AttributeManager.Item.AttributeList.Handle,
+				         weapon.AttributeManager.Item.NetworkedDynamicAttributes.Handle
+			         })
+			{
+				CAttributeListSetOrAddAttributeValueByName.Invoke(attributesHandle, "keychain slot 0 id", ViewAsFloat(keyChain.Id));
+				CAttributeListSetOrAddAttributeValueByName.Invoke(attributesHandle, "keychain slot 0 offset x", keyChain.OffsetX);
+				CAttributeListSetOrAddAttributeValueByName.Invoke(attributesHandle, "keychain slot 0 offset y", keyChain.OffsetY);
+				CAttributeListSetOrAddAttributeValueByName.Invoke(attributesHandle, "keychain slot 0 offset z", keyChain.OffsetZ);
+				CAttributeListSetOrAddAttributeValueByName.Invoke(attributesHandle, "keychain slot 0 seed", ViewAsFloat(keyChain.Seed));
+			}
 		}
 
 		private static void GiveKnifeToPlayer(CCSPlayerController? player)
@@ -239,7 +247,7 @@ namespace WeaponPaints
 			return false;
 		}
 
-		private sealed record ChangedWeaponRefresh(
+		private sealed record HeldWeaponRefresh(
 			CBasePlayerWeapon OldWeapon,
 			string DesignerName,
 			int Clip,
@@ -247,7 +255,6 @@ namespace WeaponPaints
 
 		private bool RefreshWeapons(
 			CCSPlayerController? player,
-			IReadOnlySet<int> changedWeapons,
 			Func<bool> canContinue,
 			Action<bool> completed)
 		{
@@ -260,7 +267,7 @@ namespace WeaponPaints
 			if (weapons.Count == 0) return false;
 
 			var foundRefreshableWeapon = false;
-			var weaponsToRecreate = new List<ChangedWeaponRefresh>();
+			var weaponsToRecreate = new List<HeldWeaponRefresh>();
 			var activeSlotCommand = GetActiveWeaponSlotCommand(player);
 
 			foreach (var handle in weapons)
@@ -279,19 +286,28 @@ namespace WeaponPaints
 						continue;
 
 					foundRefreshableWeapon = true;
-					TryApplyWeaponSkin(player, weapon, "held weapon during !wp");
-
 					var defIndex = weapon.AttributeManager.Item.ItemDefinitionIndex;
 					if (weaponData.GearSlot is gear_slot_t.GEAR_SLOT_RIFLE or gear_slot_t.GEAR_SLOT_PISTOL &&
-					    changedWeapons.Contains(defIndex) &&
-					    WeaponDefindex.TryGetValue(defIndex, out var designerName))
+					    HasChangedPaint(player, defIndex, out var weaponInfo) && weaponInfo != null)
 					{
-						weaponsToRecreate.Add(new ChangedWeaponRefresh(
+						var revision = AdvanceStickerWearRevision(player, defIndex);
+						var effectiveWear = GetEffectiveWeaponWear(player, defIndex, weaponInfo.Wear);
+						Logger.LogInformation(
+							"!wp recreating {WeaponName} for {PlayerName}: stickers={StickerCount}, stickerWearRevision={Revision}, effectiveWear={EffectiveWear}",
+							weapon.DesignerName,
+							player.PlayerName,
+							weaponInfo.Stickers.Count,
+							revision,
+							effectiveWear);
+						weaponsToRecreate.Add(new HeldWeaponRefresh(
 							weapon,
-							designerName,
+							weapon.DesignerName,
 							weapon.Clip1,
 							weapon.ReserveAmmo[0]));
+						continue;
 					}
+
+					TryApplyWeaponSkin(player, weapon, "unchanged held weapon during !wp");
 				}
 				catch (Exception ex)
 				{
@@ -324,7 +340,7 @@ namespace WeaponPaints
 
 		private void RestoreStickerWeapons(
 			CCSPlayerController player,
-			IReadOnlyList<ChangedWeaponRefresh> entries,
+			IReadOnlyList<HeldWeaponRefresh> entries,
 			string? activeSlotCommand,
 			Func<bool> canContinue,
 			Action<bool> completed,
@@ -355,16 +371,23 @@ namespace WeaponPaints
 				return;
 			}
 
-			var restoredWeapons = new List<(CBasePlayerWeapon Weapon, ChangedWeaponRefresh Entry)>();
+			var restoredWeapons = new List<(CBasePlayerWeapon Weapon, HeldWeaponRefresh Entry)>();
 			foreach (var entry in entries)
 			{
 				try
 				{
-					// OnGiveNamedItemPost applies paint and stickers synchronously before first transmit.
+					// Apply synchronously in this frame. On some servers the post-hook cannot resolve
+					// the owner early enough, and even a one-frame delay leaves the client decal cache stale.
 					var weapon = new CBasePlayerWeapon(player.GiveNamedItem(entry.DesignerName));
 					if (!weapon.IsValid)
 					{
 						Logger.LogWarning("GiveNamedItem returned an invalid entity for {WeaponName}.", entry.DesignerName);
+						completed(false);
+						return;
+					}
+
+					if (!TryApplyWeaponSkin(player, weapon, "newly re-given weapon before first transmit"))
+					{
 						completed(false);
 						return;
 					}
@@ -471,51 +494,6 @@ namespace WeaponPaints
 					skin["paint"]?.ToObject<int>() == weapon.FallbackPaintKit);
 				UpdatePlayerWeaponMeshGroupMask(player, weapon, skinInfo == null || skinInfo.Value<bool>("legacy_model"));
 			}
-		}
-
-		private static Dictionary<(CsTeam Team, int WeaponDefIndex), string> CaptureCosmeticState(int playerSlot)
-		{
-			var result = new Dictionary<(CsTeam Team, int WeaponDefIndex), string>();
-			if (!GPlayerWeaponsInfo.TryGetValue(playerSlot, out var teamWeapons)) return result;
-
-			foreach (var (team, weapons) in teamWeapons)
-			{
-				foreach (var (defIndex, weaponInfo) in weapons)
-				{
-					var stickers = string.Join("|", weaponInfo.Stickers
-						.OrderBy(sticker => sticker.Slot)
-						.Select(sticker => FormattableString.Invariant(
-							$"{sticker.Slot}:{sticker.Id}:{sticker.Schema}:{sticker.OffsetX}:{sticker.OffsetY}:{sticker.Wear}:{sticker.Scale}:{sticker.Rotation}")));
-					var keychain = weaponInfo.KeyChain == null
-						? ""
-						: FormattableString.Invariant(
-							$"{weaponInfo.KeyChain.Id}:{weaponInfo.KeyChain.OffsetX}:{weaponInfo.KeyChain.OffsetY}:{weaponInfo.KeyChain.OffsetZ}:{weaponInfo.KeyChain.Seed}");
-					result[(team, defIndex)] = FormattableString.Invariant(
-						$"{weaponInfo.Paint};{weaponInfo.Seed};{weaponInfo.Wear};{weaponInfo.Nametag};{weaponInfo.StatTrak};{weaponInfo.StatTrakCount};{keychain};{stickers}");
-				}
-			}
-
-			return result;
-		}
-
-		private static HashSet<int> GetChangedWeaponDefIndexes(
-			int playerSlot,
-			CsTeam team,
-			IReadOnlyDictionary<(CsTeam Team, int WeaponDefIndex), string> before)
-		{
-			var after = CaptureCosmeticState(playerSlot);
-			var defIndexes = before.Keys
-				.Concat(after.Keys)
-				.Where(key => key.Team == team)
-				.Select(key => key.WeaponDefIndex)
-				.Distinct();
-
-			return defIndexes.Where(defIndex =>
-			{
-				before.TryGetValue((team, defIndex), out var oldValue);
-				after.TryGetValue((team, defIndex), out var newValue);
-				return !string.Equals(oldValue, newValue, StringComparison.Ordinal);
-			}).ToHashSet();
 		}
 
 		private bool TryApplyWeaponSkin(CCSPlayerController player, CBasePlayerWeapon weapon, string context)
@@ -639,6 +617,24 @@ namespace WeaponPaints
 		private static float ClampWear(float wear)
 		{
 			return float.IsFinite(wear) && wear > 0.0f && wear <= 1.0f ? wear : 0.001f;
+		}
+
+		private static int AdvanceStickerWearRevision(CCSPlayerController player, int weaponDefIndex)
+		{
+			var key = (player.Slot, player.Team, weaponDefIndex);
+			return StickerWearRevisions.AddOrUpdate(key, 1, (_, current) => current >= 10 ? 1 : current + 1);
+		}
+
+		private static float GetEffectiveWeaponWear(CCSPlayerController player, int weaponDefIndex, float configuredWear)
+		{
+			var baseWear = ClampWear(configuredWear);
+			if (!StickerWearRevisions.TryGetValue((player.Slot, player.Team, weaponDefIndex), out var revision))
+				return baseWear;
+
+			var offset = revision * 0.006f;
+			return baseWear <= 0.94f
+				? Math.Min(baseWear + offset, 1.0f)
+				: Math.Max(baseWear - offset, 0.001f);
 		}
 
 		private static void GivePlayerAgent(CCSPlayerController player)

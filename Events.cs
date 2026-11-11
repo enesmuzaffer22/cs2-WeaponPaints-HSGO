@@ -85,6 +85,8 @@ namespace WeaponPaints
 			}
 			
 			CommandsCooldown.Remove(player.Slot);
+			foreach (var key in StickerWearRevisions.Keys.Where(key => key.PlayerSlot == player.Slot))
+				StickerWearRevisions.TryRemove(key, out _);
 			Players.Remove(player);
 
 			return HookResult.Continue;
@@ -97,6 +99,7 @@ namespace WeaponPaints
 			_mapGeneration++;
 			PlayerMapRefreshGenerations.Clear();
 			AppliedWeaponEntities.Clear();
+			StickerWearRevisions.Clear();
 		}
 
 		private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
