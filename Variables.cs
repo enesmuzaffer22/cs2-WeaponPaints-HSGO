@@ -23,6 +23,7 @@ public partial class WeaponPaints
 	private static readonly Dictionary<int, DateTime> CommandsCooldown = new();
 	private static readonly ConcurrentDictionary<int, long> PlayerRefreshGenerations = new();
 	private static readonly ConcurrentDictionary<ulong, int> PlayerMapRefreshGenerations = new();
+	private static readonly ConcurrentDictionary<nint, byte> AppliedWeaponEntities = new();
 	private static int _mapGeneration;
 	internal static Database? Database;
 
@@ -95,8 +96,6 @@ public partial class WeaponPaints
 
 	private const ulong MinimumCustomItemId = 65578;
 	private ulong _nextItemId = MinimumCustomItemId;
-	private readonly ConcurrentDictionary<int, ConcurrentDictionary<int, float>> _temporaryPlayerWeaponWear = new();
-	
 	private int _fadeSeed;
 
 	internal List<CCSPlayerController> Players = [];

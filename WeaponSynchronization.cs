@@ -297,17 +297,25 @@ internal class WeaponSynchronization
 
 					if (stickerData == null || string.IsNullOrEmpty(stickerData.ToString())) continue;
 						
-					var parts = stickerData.ToString()!.Split(';');
+					var rawSticker = stickerData.ToString()!;
+					var parts = rawSticker.Split(';');
 
 					//"id;schema;x;y;wear;scale;rotation"
 					if (parts.Length != 7 ||
 					    !uint.TryParse(parts[0], out uint stickerId) ||
 					    !uint.TryParse(parts[1], out uint stickerSchema) ||
-					    !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float stickerOffsetX) ||
-					    !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float stickerOffsetY) ||
-					    !float.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out float stickerWear) ||
-					    !float.TryParse(parts[5], NumberStyles.Float, CultureInfo.InvariantCulture, out float stickerScale) ||
-					    !float.TryParse(parts[6], NumberStyles.Float, CultureInfo.InvariantCulture, out float stickerRotation)) continue;
+					    !TryParseStickerFloat(parts[2], out float stickerOffsetX) ||
+					    !TryParseStickerFloat(parts[3], out float stickerOffsetY) ||
+					    !TryParseStickerFloat(parts[4], out float stickerWear) ||
+					    !TryParseStickerFloat(parts[5], out float stickerScale) ||
+					    !TryParseStickerFloat(parts[6], out float stickerRotation))
+					{
+						Utility.Log(
+							$"Ignoring malformed sticker data for SteamID {player.SteamId}, weapon {weaponDefIndex}, slot {i}: '{rawSticker}'");
+						continue;
+					}
+
+					if (stickerId == 0) continue;
 						
 					StickerInfo stickerInfo = new StickerInfo
 					{
@@ -316,8 +324,10 @@ internal class WeaponSynchronization
 						Schema = stickerSchema,
 						OffsetX = stickerOffsetX,
 						OffsetY = stickerOffsetY,
-						Wear = stickerWear,
-						Scale = stickerScale,
+						Wear = Math.Clamp(stickerWear, 0.0f, 1.0f),
+						// A zero scale is the database default for an empty slot. Once an ID is
+						// present it would make the decal invisible, so use the game's neutral scale.
+						Scale = stickerScale > 0 ? stickerScale : 1.0f,
 						Rotation = stickerRotation
 					};
 
@@ -350,6 +360,21 @@ internal class WeaponSynchronization
 		{
 			throw new InvalidOperationException("Unable to load weapon paint data.", ex);
 		}
+	}
+
+	private static bool TryParseStickerFloat(string value, out float result)
+	{
+		if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result) &&
+		    float.IsFinite(result))
+			return true;
+
+		// External web panels sometimes serialize decimals using the host locale.
+		// The sticker format is semicolon-delimited, so a comma can safely be normalized.
+		return float.TryParse(
+			value.Replace(',', '.'),
+			NumberStyles.Float,
+			CultureInfo.InvariantCulture,
+			out result) && float.IsFinite(result);
 	}
 
 	private void GetMusicFromDatabase(PlayerInfo? player, MySqlConnection connection)

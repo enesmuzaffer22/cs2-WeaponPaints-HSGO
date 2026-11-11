@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace WeaponPaints;
@@ -9,8 +10,14 @@ public partial class WeaponPaints
 {
 	private void OnCommandRefresh(CCSPlayerController? player, CommandInfo command)
 	{
-		if (!Config.Additional.CommandWpEnabled || !_gBCommandsAllowed) return;
+		if (!Config.Additional.CommandWpEnabled) return;
 		if (!Utility.IsPlayerValid(player) || player == null) return;
+		if (!_gBCommandsAllowed || !player.PawnIsAlive)
+		{
+			if (!string.IsNullOrEmpty(Localizer["wp_command_refresh_unavailable"]))
+				player.Print(Localizer["wp_command_refresh_unavailable"]);
+			return;
+		}
 
 		if (CommandsCooldown.TryGetValue(player.Slot, out var cooldownEndTime) &&
 		    DateTime.UtcNow < cooldownEndTime)
@@ -21,7 +28,11 @@ public partial class WeaponPaints
 		}
 
 		CommandsCooldown[player.Slot] = DateTime.UtcNow.AddSeconds(Config.CmdRefreshCooldownSeconds);
-		QueuePlayerDataRefresh(player, reapplyCosmetics: true, notifyPlayer: true);
+		QueuePlayerDataRefresh(
+			player,
+			reapplyCosmetics: true,
+			notifyPlayer: true,
+			refreshHeldWeapons: true);
 	}
 
 	private void OnCommandWS(CCSPlayerController? player, CommandInfo command)
@@ -109,20 +120,26 @@ public partial class WeaponPaints
 
 		Console.WriteLine($"[WeaponPaints] Queuing database refresh for {targets.Count} player(s).");
 		foreach (var target in targets)
-			QueuePlayerDataRefresh(target, reapplyCosmetics: true, logToConsole: true);
+			QueuePlayerDataRefresh(
+				target,
+				reapplyCosmetics: true,
+				logToConsole: true,
+				refreshHeldWeapons: true);
 	}
 
 	private void QueuePlayerDataRefresh(
 		CCSPlayerController player,
 		bool reapplyCosmetics,
 		bool notifyPlayer = false,
-		bool logToConsole = false)
+		bool logToConsole = false,
+		bool refreshHeldWeapons = false)
 	{
 		if (WeaponSync == null || !Utility.IsPlayerValid(player)) return;
 
 		var expectedSteamId = player.SteamID;
 		var playerInfo = CreatePlayerInfo(player);
 		var refreshGeneration = PlayerRefreshGenerations.AddOrUpdate(player.Slot, 1, (_, current) => current + 1);
+		var cosmeticsBeforeRefresh = CaptureCosmeticState(player.Slot);
 
 		_ = Task.Run(async () =>
 		{
@@ -136,8 +153,7 @@ public partial class WeaponPaints
 
 				if (!loaded)
 				{
-					if (logToConsole)
-						Console.WriteLine($"[WeaponPaints] Database refresh failed for {player.PlayerName}.");
+					FailPlayerRefresh(player, notifyPlayer, logToConsole);
 					return;
 				}
 
@@ -148,7 +164,9 @@ public partial class WeaponPaints
 						expectedSteamId,
 						refreshGeneration,
 						notifyPlayer,
-						logToConsole);
+						logToConsole,
+						refreshHeldWeapons,
+						cosmeticsBeforeRefresh);
 				}
 				else
 				{
@@ -164,6 +182,8 @@ public partial class WeaponPaints
 		long refreshGeneration,
 		bool notifyPlayer,
 		bool logToConsole,
+		bool refreshHeldWeapons,
+		IReadOnlyDictionary<(CsTeam Team, int WeaponDefIndex), string> cosmeticsBeforeRefresh,
 		int attempt = 0)
 	{
 		if (!player.IsValid || player.SteamID != expectedSteamId ||
@@ -171,9 +191,28 @@ public partial class WeaponPaints
 		    current != refreshGeneration)
 			return;
 
-		if (ApplyCachedCosmetics(player))
+		IReadOnlySet<int> changedWeapons = refreshHeldWeapons
+			? GetChangedWeaponDefIndexes(player.Slot, player.Team, cosmeticsBeforeRefresh)
+			: new HashSet<int>();
+
+		bool IsCurrentRefresh()
 		{
-			CompletePlayerRefresh(player, notifyPlayer, logToConsole);
+			return player.IsValid && player.SteamID == expectedSteamId &&
+			       PlayerRefreshGenerations.TryGetValue(player.Slot, out var generation) &&
+			       generation == refreshGeneration;
+		}
+
+		if (ApplyCachedCosmetics(player, refreshHeldWeapons, changedWeapons, IsCurrentRefresh, success =>
+		    {
+			    if (!IsCurrentRefresh())
+				    return;
+
+			    if (success)
+				    CompletePlayerRefresh(player, notifyPlayer, logToConsole);
+			    else
+				    FailPlayerRefresh(player, notifyPlayer, logToConsole);
+		    }))
+		{
 			return;
 		}
 
@@ -182,18 +221,31 @@ public partial class WeaponPaints
 			Logger.LogWarning(
 				"Cosmetic refresh for {PlayerName} was loaded but could not be applied because the pawn or weapons were not ready.",
 				player.PlayerName);
+			FailPlayerRefresh(player, notifyPlayer, logToConsole);
 			return;
 		}
 
-		AddTimer(0.2f * (attempt + 1), () =>
+		RunAfterSeconds(0.2f * (attempt + 1), () =>
 			ScheduleCachedCosmeticApply(
 				player,
 				expectedSteamId,
 				refreshGeneration,
 				notifyPlayer,
 				logToConsole,
-				attempt + 1),
-			CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+				refreshHeldWeapons,
+				cosmeticsBeforeRefresh,
+				attempt + 1));
+	}
+
+	private void FailPlayerRefresh(CCSPlayerController player, bool notifyPlayer, bool logToConsole)
+	{
+		Logger.LogWarning("Cosmetic refresh failed for {PlayerName}.", player.PlayerName);
+
+		if (notifyPlayer && !string.IsNullOrEmpty(Localizer["wp_command_refresh_failed"]))
+			player.Print(Localizer["wp_command_refresh_failed"]);
+
+		if (logToConsole)
+			Console.WriteLine($"[WeaponPaints] Database data loaded, but weapon refresh failed for {player.PlayerName}.");
 	}
 
 	private void CompletePlayerRefresh(CCSPlayerController player, bool notifyPlayer, bool logToConsole)
@@ -205,19 +257,30 @@ public partial class WeaponPaints
 			Console.WriteLine($"[WeaponPaints] Database refresh completed for {player.PlayerName}.");
 	}
 
-	private bool ApplyCachedCosmetics(CCSPlayerController player)
+	private bool ApplyCachedCosmetics(
+		CCSPlayerController player,
+		bool refreshHeldWeapons,
+		IReadOnlySet<int> changedWeapons,
+		Func<bool> canContinue,
+		Action<bool> completed)
 	{
 		if (Config.Additional.GloveEnabled)
 			GivePlayerGloves(player);
 		var weaponsAccepted = true;
 		if (Config.Additional.SkinEnabled || Config.Additional.KnifeEnabled)
-			weaponsAccepted = RefreshWeapons(player);
+		{
+			weaponsAccepted = refreshHeldWeapons
+				? RefreshWeapons(player, changedWeapons, canContinue, completed)
+				: ApplyWeaponSkinsInPlace(player);
+		}
 		if (Config.Additional.AgentEnabled)
 			GivePlayerAgent(player);
 		if (Config.Additional.MusicEnabled)
 			GivePlayerMusicKit(player);
 		if (Config.Additional.PinsEnabled)
 			GivePlayerPin(player);
+		if (!refreshHeldWeapons || (!Config.Additional.SkinEnabled && !Config.Additional.KnifeEnabled))
+			completed(true);
 
 		return weaponsAccepted;
 	}
@@ -247,7 +310,7 @@ public partial class WeaponPaints
 			return;
 
 		weaponInfo.StatTrak = !weaponInfo.StatTrak;
-		RefreshWeapons(player);
+		TryApplyWeaponSkin(player, weapon, "StatTrak update");
 
 		if (!string.IsNullOrEmpty(Localizer["wp_stattrak_action"]))
 			player.Print(Localizer["wp_stattrak_action"]);

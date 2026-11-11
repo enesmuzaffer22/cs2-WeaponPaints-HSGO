@@ -84,7 +84,6 @@ namespace WeaponPaints
 				GPlayersPin.TryRemove(player.Slot, out _);
 			}
 			
-			_temporaryPlayerWeaponWear.TryRemove(player.Slot, out _);
 			CommandsCooldown.Remove(player.Slot);
 			Players.Remove(player);
 
@@ -97,6 +96,7 @@ namespace WeaponPaints
 			_nextItemId = MinimumCustomItemId;
 			_mapGeneration++;
 			PlayerMapRefreshGenerations.Clear();
+			AppliedWeaponEntities.Clear();
 		}
 
 		private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
@@ -184,7 +184,7 @@ namespace WeaponPaints
 				var player = GetPlayerFromItemServices(itemServices);
 				if (player != null)
 				{
-					GivePlayerWeaponSkin(player, weapon);
+					TryApplyWeaponSkin(player, weapon, "GiveNamedItem post-hook");
 				}
 			}
 			catch (Exception ex)
@@ -205,6 +205,7 @@ namespace WeaponPaints
 				{
 					var weapon = new CBasePlayerWeapon(entity.Handle);
 					if (!weapon.IsValid) return;
+					if (AppliedWeaponEntities.ContainsKey(weapon.Handle)) return;
 
 					try
 					{
@@ -233,7 +234,7 @@ namespace WeaponPaints
 						if (string.IsNullOrEmpty(player?.PlayerName)) return;
 						if (!Utility.IsPlayerValid(player)) return;
 						
-						GivePlayerWeaponSkin(player, weapon);
+						TryApplyWeaponSkin(player, weapon, "entity creation fallback");
 					}
 					catch (Exception ex)
 					{
@@ -244,21 +245,33 @@ namespace WeaponPaints
 		}
 
 		[GameEventHandler]
-		public HookResult OnItemPickup(EventItemPickup @event, GameEventInfo _)
+		public HookResult OnItemPickup(EventItemPickup @event, GameEventInfo eventInfo)
 		{
 			var player = @event.Userid;
 			if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
-			if (!@event.Item.Contains("knife")) return HookResult.Continue;
-		
-			var weaponDefIndex = (int)@event.Defindex;
-				
-			if (!HasChangedKnife(player, out var _) || !HasChangedPaint(player, weaponDefIndex, out var _))
+			if (player is not { Connected: PlayerConnectedState.Connected, PawnIsAlive: true, PlayerPawn.IsValid: true })
 				return HookResult.Continue;
-			
-			if (player is { Connected: PlayerConnectedState.Connected, PawnIsAlive: true, PlayerPawn.IsValid: true })
+
+			var weaponDefIndex = (int)@event.Defindex;
+			if (@event.Item.Contains("knife"))
 			{
-				GiveOnItemPickup(player);
+				if (HasChangedKnife(player, out _) && HasChangedPaint(player, weaponDefIndex, out _))
+					GiveOnItemPickup(player);
+				return HookResult.Continue;
 			}
+
+			Server.NextFrame(() =>
+			{
+				var weapons = player.PlayerPawn.Value?.WeaponServices?.MyWeapons;
+				if (weapons == null) return;
+
+				var pickedUpWeapon = weapons
+					.Select(handle => handle.Value)
+					.FirstOrDefault(weapon => weapon is { IsValid: true } &&
+					                          weapon.AttributeManager.Item.ItemDefinitionIndex == weaponDefIndex);
+				if (pickedUpWeapon != null)
+					TryApplyWeaponSkin(player, pickedUpWeapon, "picked-up weapon");
+			});
 		
 			return HookResult.Continue;
 		}

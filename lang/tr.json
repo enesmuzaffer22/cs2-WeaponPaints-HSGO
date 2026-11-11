@@ -1,6 +1,6 @@
 {
 	"wp_prefix": "{lightblue}[WeaponPaints] {default}",
-	"wp_info_website": "Skinlerinizi ayarlamak için {lime}{0}{default} sitesini ziyaret edin",
+	"wp_info_website": "Skinlerinizi değiştirmek için {lime}{0}{default} adresini ziyaret edin.",
 	"wp_info_refresh": "Seçtiğiniz skinleri senkronize etmek için {lime}!wp{default} yazın",
 	"wp_info_knife": "Bıçak seçmek için {lime}!knife{default} yazın",
 	"wp_info_glove": "Eldiven seçmek için {lime}!gloves{default} yazın",
@@ -9,6 +9,8 @@
 	"wp_info_pin": "{lime}!pins{default} yazarak pinler menüsünü açın",
 	"wp_command_cooldown": "{lightred}Silah skinlerinizi yenilemek için biraz bekleyin",
 	"wp_command_refresh_done": "{lime}Silah skinleriniz uygulanıyor",
+	"wp_command_refresh_failed": "{lightred}Skinleriniz yenilenemedi. Lütfen tekrar deneyin.",
+	"wp_command_refresh_unavailable": "{lightred}Skinlerinizi yalnızca hayattayken ve round devam ederken yenileyebilirsiniz.",
 	"wp_knife_menu_select": "Bıçağınızı {lime}{0}{default} olarak belirlediniz",
 	"wp_knife_menu_kill": "",
 	"wp_knife_menu_title": "Bıçak Menüsü",

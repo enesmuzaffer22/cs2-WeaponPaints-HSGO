@@ -1,6 +1,6 @@
 {
 	"wp_prefix": "{lightblue}[WeaponPaints] {default}",
-	"wp_info_website": "Visit {lime}{0}{default} where you can change skins",
+	"wp_info_website": "Skinlerinizi değiştirmek için {lime}{0}{default} adresini ziyaret edin.",
 	"wp_info_refresh": "Type {lime}!wp{default} to synchronize chosen skins",
 	"wp_info_knife": "Type {lime}!knife{default} to open knife menu",
 	"wp_info_glove": "Type {lime}!gloves{default} to open gloves menu",
@@ -9,6 +9,8 @@
 	"wp_info_pin": "Type {lime}!pins{default} to open pins menu",
 	"wp_command_cooldown": "{lightred}You can't refresh weapon paints right now",
 	"wp_command_refresh_done": "{lime}Refreshing weapon paints",
+	"wp_command_refresh_failed": "{lightred}Skinleriniz yenilenemedi. Lütfen tekrar deneyin.",
+	"wp_command_refresh_unavailable": "{lightred}Skinlerinizi yalnızca hayattayken ve round devam ederken yenileyebilirsiniz.",
 	"wp_knife_menu_select": "You have chosen {lime}{0}{default} as your knife",
 	"wp_knife_menu_kill": "",
 	"wp_knife_menu_title": "Knife Menu",

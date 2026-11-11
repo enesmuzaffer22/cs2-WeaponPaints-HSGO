@@ -18,11 +18,7 @@ namespace WeaponPaints
 			try
 			{
 				await using var connection = await WeaponPaints.Database.GetConnectionAsync();
-				await using var transaction = await connection.BeginTransactionAsync();
-
-				try
-				{
-					string[] createTableQueries =
+				string[] createTableQueries =
 					[
 						@"
 					    CREATE TABLE IF NOT EXISTS `wp_player_skins` (
@@ -85,17 +81,33 @@ namespace WeaponPaints
 					    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;"
 					];
 
-					foreach (var query in createTableQueries)
-					{
-						await connection.ExecuteAsync(query, transaction: transaction);
-					}
-
-					await transaction.CommitAsync();
-				}
-				catch (Exception)
+				foreach (var query in createTableQueries)
 				{
-					await transaction.RollbackAsync();
-					throw new Exception("[WeaponPaints] Unable to create tables!");
+					await connection.ExecuteAsync(query);
+				}
+
+				var requiredSkinColumns = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					["weapon_nametag"] = "VARCHAR(128) DEFAULT NULL",
+					["weapon_stattrak"] = "tinyint(1) NOT NULL DEFAULT 0",
+					["weapon_stattrak_count"] = "int(10) NOT NULL DEFAULT 0",
+					["weapon_sticker_0"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0;0;0'",
+					["weapon_sticker_1"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0;0;0'",
+					["weapon_sticker_2"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0;0;0'",
+					["weapon_sticker_3"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0;0;0'",
+					["weapon_sticker_4"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0;0;0'",
+					["weapon_keychain"] = "VARCHAR(128) NOT NULL DEFAULT '0;0;0;0;0'"
+				};
+
+				var existingSkinColumns = (await connection.QueryAsync<string>(
+					"SELECT `COLUMN_NAME` FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_SCHEMA` = @database AND `TABLE_NAME` = 'wp_player_skins'",
+					new { database = connection.Database })).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+				foreach (var (column, definition) in requiredSkinColumns)
+				{
+					if (existingSkinColumns.Contains(column)) continue;
+					await connection.ExecuteAsync(
+						$"ALTER TABLE `wp_player_skins` ADD COLUMN `{column}` {definition}");
 				}
 			}
 			catch (Exception ex)

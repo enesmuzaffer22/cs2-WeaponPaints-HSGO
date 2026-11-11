@@ -194,7 +194,7 @@ if (isset($_SESSION['steamid'])) {
 									<div class="form-group">
 										<select class="form-select" id="wearSelect<?php echo $defindex ?>" name="wearSelect" onchange="updateWearValue<?php echo $defindex ?>(this.value)">
 											<option disabled>Select Wear</option>
-											<option value="0.00" <?php echo ($initialWearValue == 0.00) ? 'selected' : ''; ?>>Factory New</option>
+											<option value="0.001" <?php echo ($initialWearValue <= 0.001) ? 'selected' : ''; ?>>Factory New</option>
 											<option value="0.07" <?php echo ($initialWearValue == 0.07) ? 'selected' : ''; ?>>Minimal Wear</option>
 											<option value="0.15" <?php echo ($initialWearValue == 0.15) ? 'selected' : ''; ?>>Field-Tested</option>
 											<option value="0.38" <?php echo ($initialWearValue == 0.38) ? 'selected' : ''; ?>>Well-Worn</option>
